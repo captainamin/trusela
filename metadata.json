@@ -1,0 +1,5 @@
+{
+  "name": "Trusela",
+  "description": "A security data collection app for phone dealers to securely record details of used phone sellers.",
+  "requestFramePermissions": ["camera"]
+}

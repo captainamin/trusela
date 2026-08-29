@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #001f3f;
+  --color-yellow: #FFDC00;
+  --color-navy-light: #003366;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900;
+}
+
+.btn-primary {
+  @apply bg-navy text-white px-4 py-2 rounded-lg font-medium hover:bg-navy-light transition-colors disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply bg-yellow text-navy px-4 py-2 rounded-lg font-medium hover:bg-yellow/90 transition-colors disabled:opacity-50;
+}
+
+.input-field {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy focus:border-transparent outline-none;
+}
+
+.card {
+  @apply bg-white p-6 rounded-xl shadow-sm border border-gray-100;
+}

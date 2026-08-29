@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User metadata and Google API integration details",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "spreadsheetId": { "type": "string" },
+        "folderId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "subscriptionStatus": { "type": "string", "enum": ["trial", "active", "expired"] },
+        "planType": { "type": "string", "enum": ["basic", "manager"] },
+        "trialEndsAt": { "type": "string", "format": "date-time" },
+        "recordCount": { "type": "integer" },
+        "maxSalesPersons": { "type": "integer" },
+        "dealerName": { "type": "string" },
+        "dealerPhone": { "type": "string" },
+        "marketName": { "type": "string" },
+        "shopNumber": { "type": "string" }
+      },
+      "required": ["email", "spreadsheetId", "folderId", "createdAt", "subscriptionStatus", "trialEndsAt", "recordCount"]
+    },
+    "SalesPerson": {
+      "title": "SalesPerson",
+      "description": "Sales person registered under a manager",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phoneNumber": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "managerId": { "type": "string" }
+      },
+      "required": ["name", "email", "phoneNumber", "createdAt", "managerId"]
+    },
+    "IMEI": {
+      "title": "IMEI",
+      "description": "IMEI verification and flagging data",
+      "type": "object",
+      "properties": {
+        "count": { "type": "integer" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "flagged": { "type": "boolean" },
+        "reason": { "type": "string" },
+        "flaggedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["count", "lastSeen"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and integration settings"
+    },
+    "/users/{userId}/salespersons/{salesPersonId}": {
+      "schema": "SalesPerson",
+      "description": "Sales persons registered under a manager"
+    },
+    "/imeis/{imei}": {
+      "schema": "IMEI",
+      "description": "Global IMEI database for verification"
+    }
+  }
+}

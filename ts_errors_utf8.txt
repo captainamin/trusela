@@ -1,0 +1,11 @@
+﻿server.ts(15,34): error TS1343: The 'import.meta' meta-property is only allowed when the '--module' option is 'es2020', 'es2022', 'esnext', 'system', 'node16', 'node18', or 'nodenext'.
+server/routes/google.ts(181,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/google.ts(226,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/google.ts(314,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/google.ts(419,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/imei.ts(82,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/imei.ts(122,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/imei.ts(155,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/paystack.ts(12,15): error TS2554: Expected 2-3 arguments, but got 1.
+server/routes/paystack.ts(49,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+server/routes/paystack.ts(96,79): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.

@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Firebase Auth UID)
+    // Fields:
+    //   - email: string (required)
+    //   - spreadsheetId: string (required)
+    //   - folderId: string (required)
+    //   - createdAt: timestamp (required)
+    //   - subscriptionStatus: string (required, enum: trial, active, expired)
+    //   - planType: string (optional, enum: basic, manager)
+    //   - trialEndsAt: timestamp (required)
+    //   - recordCount: number (required)
+    //   - maxSalesPersons: number (optional)
+    //   - dealerName: string (optional)
+    //   - dealerPhone: string (optional)
+    //   - marketName: string (optional)
+    //   - shopNumber: string (optional)
+    //
+    // Collection: users/{userId}/salespersons
+    // Document ID: salesPersonId
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - phoneNumber: string (required)
+    //   - createdAt: timestamp (required)
+    //   - managerId: string (required)
+    //
+    // Collection: imeis
+    // Document ID: imei (15-digit string)
+    // Fields:
+    //   - count: number (required)
+    //   - lastSeen: timestamp (required)
+    //   - flagged: boolean (optional)
+    //   - reason: string (optional)
+    //   - flaggedAt: timestamp (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return data.email is string && isValidEmail(data.email) &&
+             (data.spreadsheetId == null || data.spreadsheetId is string) &&
+             (data.folderId == null || data.folderId is string) &&
+             data.subscriptionStatus in ['trial', 'active', 'expired'] &&
+             (data.planType == null || data.planType in ['basic', 'manager']) &&
+             data.recordCount is number &&
+             data.recordCount >= 0;
+    }
+
+    function isValidSalesPerson(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.phoneNumber is string && data.phoneNumber.size() > 0 &&
+             data.managerId is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      
+      // Salespersons subcollection
+      match /salespersons/{salesPersonId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidSalesPerson(request.resource.data);
+        allow update: if isOwner(userId) && isValidSalesPerson(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // IMEIs collection - Server-side only
+    match /imeis/{imei} {
+      allow read, write: if false; // Only accessible via Admin SDK
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

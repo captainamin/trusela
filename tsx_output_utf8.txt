@@ -1,0 +1,76 @@
+﻿[dotenv@17.3.1] injecting env (5) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+>>> SERVER RELOADED AT: 2026-03-31T15:46:53.181Z
+[DEBUG] Server Start - APP_URL: http://localhost:3005
+[Firebase] Initializing for project: gen-lang-client-0241977091
+[Firebase] Target Database: ai-studio-0e14dbec-d324-445c-a0dd-ffe4bdeccb63
+[Firebase] Initializing with Storage Bucket: gen-lang-client-0241977091.firebasestorage.app
+[Firebase] Using database: ai-studio-0e14dbec-d324-445c-a0dd-ffe4bdeccb63
+Server started on http://localhost:3005
+[DEBUG-GLOBAL] GET /proxy-drive-image/1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[Proxy-Wildcard] Match! URL: /proxy-drive-image/1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3, fileId: 1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw, userId: CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:14:18 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:14:18 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[Proxy-Direct] Serving 1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw as image/jpeg
+[DEBUG-GLOBAL] GET /proxy-drive-image/1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[Proxy-Wildcard] Match! URL: /proxy-drive-image/1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3, fileId: 1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw, userId: CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[Proxy-Direct] Serving 1InC8Pih_huIYK-5g7a7B6NfY7TXaJdrw as image/jpeg
+[2m10:15:15 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:15:18 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:15:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:15:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:15:20 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:15:57 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:15:59 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:15:59 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:16:00 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:16:00 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:17:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:17:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:17:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:18:02 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:18:04 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:18:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mlint_output.txt[22m
+[2m10:18:38 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:18:46 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:19:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:19:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:20:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:20:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /api/config-check
+[DEBUG-GLOBAL] GET /api/config-check
+[2m10:22:09 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:22:09 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:22:10 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:22:10 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:22:10 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[DEBUG-GLOBAL] GET /proxy-drive-image/1160yqo8APSChckp_DSQhy23I-nvj5Wko?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[Proxy-Wildcard] Match! URL: /proxy-drive-image/1160yqo8APSChckp_DSQhy23I-nvj5Wko?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3, fileId: 1160yqo8APSChckp_DSQhy23I-nvj5Wko, userId: CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[DEBUG-GLOBAL] GET /proxy-drive-image/1seDIhs6jgoIEtHC8ZS8f6xL5nxPvqEQV?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[Proxy-Wildcard] Match! URL: /proxy-drive-image/1seDIhs6jgoIEtHC8ZS8f6xL5nxPvqEQV?userId=CtAtwcZf8qZcyKW7MbJ0XYvbqbE3, fileId: 1seDIhs6jgoIEtHC8ZS8f6xL5nxPvqEQV, userId: CtAtwcZf8qZcyKW7MbJ0XYvbqbE3
+[Proxy-Direct] Serving 1seDIhs6jgoIEtHC8ZS8f6xL5nxPvqEQV as image/jpeg
+[Proxy-Direct] Serving 1160yqo8APSChckp_DSQhy23I-nvj5Wko as image/jpeg
+[2m10:23:35 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:23:35 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:23:35 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:27:15 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver/routes/google.ts[22m
+[2m10:27:15 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver/routes/google.ts[22m
+[2m10:27:17 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
+[2m10:27:17 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mtsx_output.txt[22m
