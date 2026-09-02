@@ -9,7 +9,12 @@ let storageBucketName = '';
 export async function initFirebase() {
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
     try {
-      const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      // PowerShell ConvertTo-Json double-escapes \n inside strings (\\n).
+      // Fix that before parsing so JSON.parse doesn't throw on the private key.
+      const rawJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+        .replace(/\\\\n/g, '\\n')   // \\n → \n  (double-escaped newlines)
+        .replace(/\\\\t/g, '\\t');  // \\t → \t  (double-escaped tabs, just in case)
+      const serviceAccount = JSON.parse(rawJson);
       
       let config: any = {};
       try {
