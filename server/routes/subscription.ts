@@ -3,8 +3,10 @@ import { z } from 'zod';
 import admin from 'firebase-admin';
 import crypto from 'crypto';
 import { getFirestore } from '../config/firebase.ts';
+import { requireAuth, authenticatedUid } from '../middleware/auth.ts';
 
 export const subscriptionRouter = Router();
+subscriptionRouter.use(requireAuth);
 
 // Help Helper: SHA-256 Hashing
 function sha256(text: string): string {
@@ -107,14 +109,15 @@ subscriptionRouter.get('/plans', async (req, res) => {
     res.json({ success: true, plans });
   } catch (error: any) {
     console.error('Fetch Plans Error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch subscription plans', details: error.message });
+    res.status(500).json({ error: 'Failed to fetch subscription plans' });
   }
 });
 
 // 2. Update Plan Settings (Admin Only)
 subscriptionRouter.post('/plans/update', async (req, res) => {
   try {
-    const { planId, name, durationDays, price, userId } = UpdatePlanSchema.parse(req.body);
+    const { planId, name, durationDays, price } = UpdatePlanSchema.parse(req.body);
+    const userId = authenticatedUid(req);
     await verifyAdmin(userId);
     
     const db = getFirestore();
@@ -138,7 +141,8 @@ subscriptionRouter.post('/plans/update', async (req, res) => {
 // 3. Generate Activation Keys (Admin Only)
 subscriptionRouter.post('/generate-keys', async (req, res) => {
   try {
-    const { planId, quantity, batchName, userId } = GenerateKeysSchema.parse(req.body);
+    const { planId, quantity, batchName } = GenerateKeysSchema.parse(req.body);
+    const userId = authenticatedUid(req);
     await verifyAdmin(userId);
 
     const db = getFirestore();
@@ -219,7 +223,7 @@ subscriptionRouter.post('/generate-keys', async (req, res) => {
 // 4. List Activation Keys (Admin Only)
 subscriptionRouter.get('/list-keys', async (req, res) => {
   try {
-    const userId = req.query.userId as string;
+    const userId = authenticatedUid(req);
     await verifyAdmin(userId);
 
     const db = getFirestore();
@@ -271,7 +275,8 @@ subscriptionRouter.get('/list-keys', async (req, res) => {
 // 5. Revoke Activation Key (Admin Only)
 subscriptionRouter.post('/revoke-key', async (req, res) => {
   try {
-    const { keyHash, userId } = RevokeKeySchema.parse(req.body);
+    const { keyHash } = RevokeKeySchema.parse(req.body);
+    const userId = authenticatedUid(req);
     await verifyAdmin(userId);
 
     const db = getFirestore();
@@ -305,7 +310,8 @@ subscriptionRouter.post('/revoke-key', async (req, res) => {
 // 6. Activate Subscription Key (User Endpoint)
 subscriptionRouter.post('/activate-key', async (req, res) => {
   try {
-    const { activationKey, userId, username } = ActivateKeySchema.parse(req.body);
+    const { activationKey, username } = ActivateKeySchema.parse(req.body);
+    const userId = authenticatedUid(req);
     const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
     
     const db = getFirestore();
@@ -404,7 +410,7 @@ subscriptionRouter.post('/activate-key', async (req, res) => {
 // 7. Get Dashboard Statistics (Admin Only)
 subscriptionRouter.get('/stats', async (req, res) => {
   try {
-    const userId = req.query.userId as string;
+    const userId = authenticatedUid(req);
     await verifyAdmin(userId);
 
     const db = getFirestore();

@@ -4,8 +4,10 @@ import admin from 'firebase-admin';
 import { getDrive, getSheets, getOAuth2Client } from '../config/google.ts';
 import { getFirestore } from '../config/firebase.ts';
 import { Readable } from 'stream';
+import { requireAuth, createMediaSignature } from '../middleware/auth.ts';
 
 export const marketRouter = Router();
+marketRouter.use(requireAuth);
 
 const getOAuthClientForUser = async (userId: string) => {
   const userDoc = await getFirestore().collection('users').doc(userId).get();
@@ -150,7 +152,7 @@ marketRouter.post('/setup-market', async (req, res) => {
     console.error('Market Setup Error Final:', error.message);
     res.status(500).json({ 
       error: 'Google API Setup Failed', 
-      details: error.message 
+      details: 'Request could not be completed'
     });
   }
 });
@@ -195,7 +197,7 @@ marketRouter.get('/members/:userId', async (req, res) => {
     res.json(members);
   } catch (error: any) {
     console.error('Fetch Members Error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch members', details: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch members' });
   }
 });
 
@@ -208,7 +210,9 @@ const AddMemberSchema = z.object({
   businessType: z.string().min(1),
   shopNumber: z.string().min(1),
   address: z.string().optional(),
-  photoDataUrl: z.string().min(1, "Base64 photo data is required"),
+  photoDataUrl: z.string()
+    .max(12_000_000, "Photo is too large")
+    .regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=\s]+$/, "Only JPEG, PNG, and WebP images are supported"),
   qrCode: z.string().min(1),
   status: z.string().min(1),
   assignedRevenueTypes: z.string().optional(),
@@ -242,6 +246,9 @@ marketRouter.post('/members', async (req, res) => {
     // Process Base64 Image
     const base64Data = data.photoDataUrl.replace(/^data:image\/\w+;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
+    if (imageBuffer.length > 8 * 1024 * 1024) {
+      return res.status(413).json({ error: 'Photo is too large' });
+    }
     
     const stream = new Readable();
     stream.push(imageBuffer);
@@ -265,17 +272,12 @@ marketRouter.post('/members', async (req, res) => {
     });
 
     // Make the file publicly accessible so it can be viewed on ID Cards / Dashboards
-    if (driveRes.data.id) {
-      await drive.permissions.create({
-        fileId: driveRes.data.id,
-        requestBody: {
-          role: 'reader',
-          type: 'anyone'
-        }
-      });
+    if (!driveRes.data.id) {
+      return res.status(502).json({ error: 'Photo upload did not return a file ID' });
     }
-
-    const finalPhotoUrl = driveRes.data.webContentLink || driveRes.data.webViewLink || '';
+    const expires = Date.now() + 24 * 60 * 60 * 1000;
+    const signature = createMediaSignature(data.userId, driveRes.data.id, expires);
+    const finalPhotoUrl = `/proxy-drive-image/${driveRes.data.id}?userId=${encodeURIComponent(data.userId)}&expires=${expires}&signature=${signature}`;
 
     const registrationDate = new Date().toISOString().split('T')[0];
 
@@ -309,7 +311,7 @@ marketRouter.post('/members', async (req, res) => {
       return res.status(400).json({ error: 'Validation Error', details: error.issues });
     }
     console.error('Add Member Error:', error.message);
-    res.status(500).json({ error: 'Failed to add member', details: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to add member' });
   }
 });
 
@@ -369,7 +371,7 @@ marketRouter.put('/members/:userId/:memberId', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Update Member Error:', error.message);
-    res.status(500).json({ error: 'Failed to update member', details: error.message });
+    res.status(500).json({ error: 'Failed to update member' });
   }
 });
 
@@ -416,7 +418,7 @@ marketRouter.delete('/members/:userId/:memberId', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Delete Member Error:', error.message);
-    res.status(500).json({ error: 'Failed to delete member', details: error.message });
+    res.status(500).json({ error: 'Failed to delete member' });
   }
 });
 
@@ -577,7 +579,7 @@ marketRouter.put('/officials/:userId/:officialId', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Update Official Error:', error.message);
-    res.status(500).json({ error: 'Failed to update official', details: error.message });
+    res.status(500).json({ error: 'Failed to update official' });
   }
 });
 
@@ -621,7 +623,7 @@ marketRouter.delete('/officials/:userId/:officialId', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Delete Official Error:', error.message);
-    res.status(500).json({ error: 'Failed to delete official', details: error.message });
+    res.status(500).json({ error: 'Failed to delete official' });
   }
 });
 
@@ -916,12 +918,10 @@ marketRouter.post('/upload-logo', async (req, res) => {
       fields: 'id'
     });
 
-    await drive.permissions.create({
-      fileId: driveRes.data.id!,
-      requestBody: { role: 'reader', type: 'anyone' }
-    });
-
-    const logoUrl = `/api/drive-image/${driveRes.data.id}?userId=${userId}`;
+    if (!driveRes.data.id) return res.status(502).json({ error: 'Logo upload did not return a file ID' });
+    const expires = Date.now() + 24 * 60 * 60 * 1000;
+    const signature = createMediaSignature(userId, driveRes.data.id, expires);
+    const logoUrl = `/api/drive-image/${driveRes.data.id}?userId=${encodeURIComponent(userId)}&expires=${expires}&signature=${signature}`;
     res.json({ logoUrl });
   } catch (error: any) {
     console.error('Upload Logo Error:', error.message);

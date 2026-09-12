@@ -3,8 +3,10 @@ import { z } from 'zod';
 import admin from 'firebase-admin';
 import { getDrive, getSheets, getServiceAccountEmail, getOAuth2Client } from '../config/google.ts';
 import { getFirestore, getStorageBucketName } from '../config/firebase.ts';
+import { requireAuth, authenticatedUid, createOAuthState, verifyOAuthState, createMediaSignature, AuthenticatedRequest } from '../middleware/auth.ts';
 
 export const googleRouter = Router();
+googleRouter.use(requireAuth);
 
 const getOAuthClientForUser = async (userId: string) => {
   const userDoc = await getFirestore().collection('users').doc(userId).get();
@@ -26,7 +28,9 @@ const SetupUserSchema = z.object({
 });
 
 const UploadImageSchema = z.object({
-  base64: z.string().min(1, "Base64 data is required"),
+  base64: z.string()
+    .max(12_000_000, "Image is too large")
+    .regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=\s]+$/, "Only JPEG, PNG, and WebP images are supported"),
   name: z.string().optional(),
   folderId: z.string().optional()
 });
@@ -67,10 +71,9 @@ googleRouter.get('/debug-auth', (req, res) => {
   });
 });
 
-googleRouter.get('/auth-url', (req, res) => {
+googleRouter.get('/auth-url', (req: AuthenticatedRequest, res) => {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+    const userId = authenticatedUid(req);
 
     const oauth2Client = getOAuth2Client();
     const url = oauth2Client.generateAuthUrl({
@@ -82,7 +85,7 @@ googleRouter.get('/auth-url', (req, res) => {
         'https://www.googleapis.com/auth/userinfo.profile',
         'https://www.googleapis.com/auth/userinfo.email'
       ],
-      state: userId as string
+      state: createOAuthState(userId)
     });
     res.json({ url });
   } catch (error: any) {
@@ -92,8 +95,9 @@ googleRouter.get('/auth-url', (req, res) => {
 
 googleRouter.get('/callback', async (req, res) => {
   try {
-    const { code, state: userId } = req.query;
-    if (!code || !userId) return res.status(400).json({ error: 'Code and State are required' });
+    const { code, state } = req.query;
+    if (!code || !state || typeof state !== 'string') return res.status(400).json({ error: 'Code and State are required' });
+    const userId = verifyOAuthState(state);
 
     const oauth2Client = getOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code as string);
@@ -119,19 +123,15 @@ googleRouter.get('/callback', async (req, res) => {
       const oauth2Client = getOAuth2Client();
       oauth2Client.setCredentials(tokens);
       const oauth2 = admin.auth(); // We'll just use the userId to get email from Firebase Auth
-      const userRecord = await oauth2.getUser(userId as string);
+      const userRecord = await oauth2.getUser(userId);
       updateData.email = userRecord.email;
     } catch (authErr) {
       console.warn('[OAuth Callback] Could not fetch user email:', authErr);
     }
 
     const db = getFirestore();
-    if (!userId || userId === 'undefined') {
-      throw new Error('Invalid User ID received in OAuth state.');
-    }
-
     try {
-      await db.collection('users').doc(userId as string).set(updateData, { merge: true });
+      await db.collection('users').doc(userId).set(updateData, { merge: true });
       console.log(`[OAuth Callback] Successfully saved tokens for ${userId}`);
     } catch (dbErr: any) {
       console.error('[OAuth Callback] Firestore Error:', dbErr.message);
@@ -208,7 +208,7 @@ googleRouter.get('/diagnostics', async (req, res) => {
       }
     });
   } catch (e) {
-    res.json({ email: 'Invalid JSON', projectId: 'Invalid JSON' });
+    res.status(500).json({ error: 'Diagnostics unavailable' });
   }
 });
 
@@ -292,7 +292,7 @@ googleRouter.post('/setup-user', async (req, res) => {
     console.error('Setup Error Final:', error.message);
     res.status(500).json({ 
       error: 'Google API Setup Failed', 
-      details: error.message 
+      details: 'Request could not be completed'
     });
   }
 });
@@ -355,7 +355,7 @@ googleRouter.post('/save-setup', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('[Save Setup] Error:', error.message);
-    res.status(500).json({ error: 'Failed to save setup', details: error.message });
+    res.status(500).json({ error: 'Failed to save setup' });
   }
 });
 
@@ -374,7 +374,7 @@ googleRouter.post('/update-profile', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('[Update Profile] Error:', error.message);
-    res.status(500).json({ error: 'Failed to update profile', details: error.message });
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
@@ -384,8 +384,9 @@ googleRouter.post('/upload-image', async (req, res) => {
     const auth = await getOAuthClientForUser(userId);
     const drive = getDrive(auth);
 
-    const mimeType = base64.split(';')[0].split(':')[1] || 'image/jpeg';
-    const buffer = Buffer.from(base64.split(',')[1], 'base64');
+    const [, encoded] = base64.split(',', 2);
+    const mimeType = base64.split(';', 1)[0].slice(5);
+    const buffer = Buffer.from(encoded, 'base64');
     
     const { Readable } = await import('stream');
     const stream = new Readable();
@@ -407,15 +408,10 @@ googleRouter.post('/upload-image', async (req, res) => {
     });
 
     const fileId = file.data.id;
-    if (fileId) {
-      await drive.permissions.create({
-        fileId: fileId,
-        requestBody: { role: 'reader', type: 'anyone' },
-      });
-    }
-
-    const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
-    res.json({ url: directUrl });
+    if (!fileId) return res.status(502).json({ error: 'Image upload did not return a file ID' });
+    const expires = Date.now() + 24 * 60 * 60 * 1000;
+    const signature = createMediaSignature(userId, fileId, expires);
+    res.json({ url: `/proxy-drive-image/${fileId}?userId=${encodeURIComponent(userId)}&expires=${expires}&signature=${signature}` });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation Error', details: error.issues });
@@ -423,7 +419,7 @@ googleRouter.post('/upload-image', async (req, res) => {
     console.error('Upload Image Error:', error);
     res.status(500).json({ 
       error: 'Failed to upload image to Google Drive',
-      details: error.message
+      details: 'Request could not be completed'
     });
   }
 });
@@ -438,8 +434,10 @@ googleRouter.post('/save-record', async (req, res) => {
     const uploadImage = async (base64: string, name: string) => {
       if (!base64 || !base64.includes('base64,')) return '';
       try {
-        const mimeType = base64.split(';')[0].split(':')[1] || 'image/jpeg';
-        const buffer = Buffer.from(base64.split(',')[1], 'base64');
+        const [, encoded] = base64.split(',', 2);
+        const mimeType = base64.split(';', 1)[0].slice(5);
+        const buffer = Buffer.from(encoded, 'base64');
+        if (buffer.length > 8 * 1024 * 1024) throw new Error('Image is too large');
         const { Readable } = await import('stream');
         const stream = new Readable();
         stream.push(buffer);
@@ -451,13 +449,10 @@ googleRouter.post('/save-record', async (req, res) => {
           fields: 'id, webViewLink, webContentLink, thumbnailLink',
         });
 
-        if (file.data.id) {
-          await drive.permissions.create({
-            fileId: file.data.id,
-            requestBody: { role: 'reader', type: 'anyone' },
-          });
-        }
-        return `https://drive.google.com/uc?export=view&id=${file.data.id}`;
+        if (!file.data.id) throw new Error('Image upload did not return a file ID');
+        const expires = Date.now() + 24 * 60 * 60 * 1000;
+        const signature = createMediaSignature(userId, file.data.id, expires);
+        return `/proxy-drive-image/${file.data.id}?userId=${encodeURIComponent(userId)}&expires=${expires}&signature=${signature}`;
       } catch (uploadErr: any) {
         throw new Error(`Failed to upload ${name}: ${uploadErr.message}`);
       }
@@ -561,7 +556,7 @@ googleRouter.post('/save-record', async (req, res) => {
       return res.status(400).json({ error: 'Validation Error', details: error.issues });
     }
     console.error('Save Record Error:', error.message);
-    res.status(500).json({ error: 'Failed to save record', details: error.message });
+    res.status(500).json({ error: 'Failed to save record' });
   }
 });
 
@@ -712,9 +707,8 @@ googleRouter.post('/recalculate-count', async (req, res) => {
     res.json({ success: true, count });
   } catch (error: any) {
     console.error('Recalculate Count Error:', error.message);
-    res.status(500).json({ error: 'Failed to recalculate count', details: error.message });
+    res.status(500).json({ error: 'Failed to recalculate count' });
   }
 });
 
 // Routes below are moved to server.ts or handled elsewhere
-

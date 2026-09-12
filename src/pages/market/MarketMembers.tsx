@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MarketLayout from '../../components/MarketLayout';
-import { Search, Plus, Filter, MoreVertical, XCircle, Camera, CheckCircle2, Eye, Edit2, ShieldOff, ShieldCheck, Trash2, Phone, MapPin, Briefcase, Hash, Calendar, Crown } from 'lucide-react';
+import { Search, Plus, Filter, MoreVertical, XCircle, Camera, CheckCircle2, Eye, Edit2, ShieldOff, ShieldCheck, Trash2, Phone, MapPin, Briefcase, Hash, Calendar, Crown, FileText } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
 import axios from 'axios';
 import { toast } from 'sonner';

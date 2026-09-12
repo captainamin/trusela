@@ -3,8 +3,10 @@ import axios from 'axios';
 import admin from 'firebase-admin';
 import { z } from 'zod';
 import { getFirestore } from '../config/firebase.ts';
+import { requireAuth, authenticatedUid, AuthenticatedRequest } from '../middleware/auth.ts';
 
 export const paystackRouter = Router();
+paystackRouter.use(requireAuth);
 
 const InitializeSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -17,9 +19,13 @@ const VerifyActivateSchema = z.object({
   userId: z.string().min(1, "User ID is required")
 });
 
-paystackRouter.post('/initialize', async (req, res) => {
+paystackRouter.post('/initialize', async (req: AuthenticatedRequest, res) => {
   try {
     const { email, amount, metadata } = InitializeSchema.parse(req.body);
+    const userId = authenticatedUid(req);
+    if (req.auth?.email && email.toLowerCase() !== req.auth.email.toLowerCase()) {
+      return res.status(403).json({ error: 'Payment email must match the authenticated account' });
+    }
     
     if (!process.env.PAYSTACK_SECRET_KEY) {
       throw new Error('PAYSTACK_SECRET_KEY is missing in Secrets.');
@@ -36,7 +42,7 @@ paystackRouter.post('/initialize', async (req, res) => {
       email,
       amount: Math.round(Number(amount) * 100), // Ensure integer kobo
       callback_url: `${baseUrl}/subscription/callback`,
-      metadata
+      metadata: { ...metadata, userId }
     }, {
       headers: {
         Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
@@ -56,9 +62,10 @@ paystackRouter.post('/initialize', async (req, res) => {
   }
 });
 
-paystackRouter.post('/verify-and-activate', async (req, res) => {
+paystackRouter.post('/verify-and-activate', async (req: AuthenticatedRequest, res) => {
   try {
-    const { reference, userId } = VerifyActivateSchema.parse(req.body);
+    const { reference } = VerifyActivateSchema.parse(req.body);
+    const userId = authenticatedUid(req);
     const response = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
       headers: {
         Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
@@ -67,18 +74,40 @@ paystackRouter.post('/verify-and-activate', async (req, res) => {
 
     const txData = response.data.data;
     if (txData.status === 'success') {
+      const userDoc = await getFirestore().collection('users').doc(userId).get();
+      const accountEmail = userDoc.data()?.email || req.auth?.email;
+      const paidEmail = txData.customer?.email;
+      if (accountEmail && paidEmail && accountEmail.toLowerCase() !== paidEmail.toLowerCase()) {
+        return res.status(403).json({ error: 'Payment does not belong to the authenticated account' });
+      }
+      if (txData.metadata?.userId && txData.metadata.userId !== userId) {
+        return res.status(403).json({ error: 'Payment account mismatch' });
+      }
       const plan = txData.metadata?.plan || txData.metadata?.planType || 'basic';
+      if (!['basic', 'manager'].includes(plan)) {
+        return res.status(400).json({ error: 'Unsupported subscription plan' });
+      }
       const now = new Date();
       const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       
       const updateSubscription = async (db: admin.firestore.Firestore) => {
-        await db.collection('users').doc(userId).update({
+        await db.runTransaction(async (transaction) => {
+          const paymentRef = db.collection('processedPayments').doc(reference);
+          const paymentDoc = await transaction.get(paymentRef);
+          if (paymentDoc.exists) return;
+          transaction.update(db.collection('users').doc(userId), {
           subscriptionStatus: 'active',
           planType: plan,
           maxSalesPersons: plan === 'manager' ? 3 : 0,
           lastPaymentAt: now.toISOString(),
           subscriptionEndsAt: thirtyDaysLater.toISOString(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          transaction.set(paymentRef, {
+            userId,
+            reference,
+            processedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
         });
       };
 
