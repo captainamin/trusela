@@ -16,6 +16,7 @@ export default function AddRecord() {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
   const location = useLocation();
+  const inventoryMode = location.state?.inventoryMode as 'product' | 'stock' | undefined;
   const [isPremium, setIsPremium] = useState(false);
   const [recordCount, setRecordCount] = useState(0);
 
@@ -462,7 +463,7 @@ export default function AddRecord() {
   }
 
   return (
-    <Layout title="Add New Record">
+    <Layout title={inventoryMode === 'stock' ? 'Add Stock' : inventoryMode === 'product' ? 'Add Product' : 'Add New Record'}>
       {/* Hidden Receipt Template for html2canvas */}
       <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '850px' }}>
         <div ref={receiptRef} className="bg-white p-10" style={{ width: '850px', fontFamily: '"Inter", sans-serif', color: '#1f2937' }}>

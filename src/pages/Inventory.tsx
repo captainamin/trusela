@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, CheckCircle2, Filter, Package, RefreshCcw, Search,
   ShoppingCart, Smartphone, TrendingUp, X
@@ -15,6 +15,7 @@ type FilterValue = 'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'SOLD';
 
 export default function Inventory() {
   const { user, metadata } = useUser();
+  const navigate = useNavigate();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('SHOP');
@@ -26,6 +27,8 @@ export default function Inventory() {
   const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [buyerDetails, setBuyerDetails] = useState({ name: '', phone: '', address: '' });
+  const canManageInventory = metadata?.role === 'admin' ||
+    (metadata?.planType === 'manager' && metadata?.subscriptionStatus === 'active');
 
   const loadRecords = async () => {
     if (!user || !metadata?.spreadsheetId) return;
@@ -122,6 +125,23 @@ export default function Inventory() {
   return (
     <Layout title="Shop">
       <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-gray-500">Sell phones and accessories with a few taps.</p>
+          </div>
+          {canManageInventory && (
+            <div className="flex gap-2">
+              <button onClick={() => navigate('/add', { state: { inventoryMode: 'product' } })}
+                className="px-4 py-3 rounded-xl bg-navy text-white font-bold text-sm">
+                Add Product
+              </button>
+              <button onClick={() => navigate('/add', { state: { inventoryMode: 'stock' } })}
+                className="px-4 py-3 rounded-xl bg-yellow text-navy font-bold text-sm">
+                Add Stock
+              </button>
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <SummaryCard label="Today's Sales" value={soldRecords.length} icon={TrendingUp} tone="navy" />
           <SummaryCard label="Items in Stock" value={stockRecords.length} icon={Package} tone="yellow" />
