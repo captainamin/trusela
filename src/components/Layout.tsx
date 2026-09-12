@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
-import { LayoutDashboard, PlusCircle, List, LogOut, User as UserIcon, RefreshCcw, CreditCard } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, List, LogOut, User as UserIcon, RefreshCcw, CreditCard, ShoppingBag } from 'lucide-react';
 import logo from '../assets/logo.png';
 import { toast } from 'sonner';
 import { useUser } from '../contexts/UserContext';
@@ -56,6 +56,7 @@ export default function Layout({ children, title }: LayoutProps) {
       ]
     : [
         { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+        { path: '/inventory', icon: ShoppingBag, label: 'Shop' },
         { path: '/add', icon: PlusCircle, label: 'Add Record' },
         { path: '/records', icon: List, label: 'Records' },
         { path: isExpired ? '/activate' : '/subscription', icon: CreditCard, label: 'Subscription' },

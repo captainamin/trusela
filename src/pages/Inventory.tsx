@@ -1,293 +1,262 @@
-import { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
-import Layout from '../components/Layout';
-import { Package, Search, Filter, Smartphone, CheckCircle2, ShoppingCart, RefreshCcw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { toast } from 'sonner';
+import {
+  AlertTriangle, CheckCircle2, Filter, Package, RefreshCcw, Search,
+  ShoppingCart, Smartphone, TrendingUp, X
+} from 'lucide-react';
 import axios from 'axios';
+import { toast } from 'sonner';
+import Layout from '../components/Layout';
 import { useUser } from '../contexts/UserContext';
+import { getEmbedUrl } from '../utils/googleDrive';
+
+type View = 'SHOP' | 'STOCK' | 'SALES';
+type FilterValue = 'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'SOLD';
 
 export default function Inventory() {
-  const { user, metadata, loading: userLoading } = useUser();
+  const { user, metadata } = useUser();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('ALL');
+  const [view, setView] = useState<View>('SHOP');
+  const [filter, setFilter] = useState<FilterValue>('ALL');
   const [search, setSearch] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
-  const [showBuyerModal, setShowBuyerModal] = useState(false);
-  const [showConfirmReturnModal, setShowConfirmReturnModal] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [showBuyerModal, setShowBuyerModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
   const [buyerDetails, setBuyerDetails] = useState({ name: '', phone: '', address: '' });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user || !metadata?.spreadsheetId) return;
-      try {
-        const response = await axios.get(`/api/google/records?spreadsheetId=${metadata.spreadsheetId}&userId=${user.uid}`);
-        setRecords(response.data.reverse());
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [user, metadata]);
+  const loadRecords = async () => {
+    if (!user || !metadata?.spreadsheetId) return;
+    try {
+      setLoading(true);
+      const response = await axios.get(
+        `/api/google/records?spreadsheetId=${metadata.spreadsheetId}&userId=${user.uid}`
+      );
+      setRecords(response.data.reverse());
+    } catch {
+      toast.error('We could not load your shop items');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleUpdateStatus = async (recordId: string, newStatus: string, details?: any) => {
-    if (!metadata?.spreadsheetId) return;
-    
-    if (newStatus === 'SOLD' && !details) {
+  useEffect(() => { loadRecords(); }, [user, metadata?.spreadsheetId]);
+
+  const stockRecords = useMemo(
+    () => records.filter(record => record.deviceStatus !== 'SOLD'),
+    [records]
+  );
+  const soldRecords = useMemo(
+    () => records.filter(record => record.deviceStatus === 'SOLD'),
+    [records]
+  );
+  const lowStock = stockRecords.filter(record => Number(record.stock || 1) <= 1);
+
+  const filteredRecords = useMemo(() => {
+    const term = search.toLowerCase().trim();
+    return records.filter(record => {
+      const searchable = [
+        record.brand, record.model, record.imei1, record.imei2, record.sku, record.barcode
+      ].filter(Boolean).join(' ').toLowerCase();
+      const matchesSearch = !term || searchable.includes(term);
+      const matchesFilter =
+        filter === 'ALL' ||
+        (filter === 'SOLD' && record.deviceStatus === 'SOLD') ||
+        (filter === 'IN_STOCK' && record.deviceStatus !== 'SOLD') ||
+        (filter === 'LOW_STOCK' && record.deviceStatus !== 'SOLD' && Number(record.stock || 1) <= 1);
+      return matchesSearch && matchesFilter;
+    });
+  }, [records, search, filter]);
+
+  const updateStatus = async (recordId: string, status: string, details?: any) => {
+    if (!metadata?.spreadsheetId || !user) return;
+    if (status === 'SOLD' && !details) {
       setSelectedRecordId(recordId);
       setShowBuyerModal(true);
       return;
     }
-
-    if (newStatus === 'IN_STOCK' && !details) {
+    if (status === 'IN_STOCK' && !details) {
       setSelectedRecordId(recordId);
-      setShowConfirmReturnModal(true);
+      setShowReturnModal(true);
       return;
     }
-
     setUpdating(recordId);
     try {
       await axios.post('/api/google/update-record-status', {
         spreadsheetId: metadata.spreadsheetId,
         recordId,
-        status: newStatus,
+        status,
         buyerDetails: details,
         userId: user.uid
       });
-      
-      setRecords(prev => prev.map(r => r.id === recordId ? { 
-        ...r, 
-        deviceStatus: newStatus,
+      setRecords(previous => previous.map(record => record.id === recordId ? {
+        ...record,
+        deviceStatus: status,
         buyerName: details?.name || '',
         buyerPhone: details?.phone || '',
         buyerAddress: details?.address || ''
-      } : r));
-      toast.success(`Device marked as ${newStatus === 'SOLD' ? 'Sold' : 'In Stock'}`);
+      } : record));
+      toast.success(status === 'SOLD' ? 'Sale recorded' : 'Item returned to stock');
       setShowBuyerModal(false);
-      setShowConfirmReturnModal(false);
+      setShowReturnModal(false);
       setSelectedRecordId(null);
       setBuyerDetails({ name: '', phone: '', address: '' });
-    } catch (error) {
-      toast.error('Failed to update status');
+    } catch {
+      toast.error('We could not update this item');
     } finally {
       setUpdating(null);
     }
   };
 
-  const filteredRecords = records.filter(r => {
-    const matchesFilter = filter === 'ALL' || r.deviceStatus === filter;
-    const matchesSearch = r.brand.toLowerCase().includes(search.toLowerCase()) || 
-                          r.model.toLowerCase().includes(search.toLowerCase()) ||
-                          r.imei1.includes(search);
-    return matchesFilter && matchesSearch;
-  });
+  const productPhoto = (record: any) => getEmbedUrl(
+    record.deviceImg1Url || record.deviceImg2Url || record.sellerPhotoUrl,
+    user?.uid
+  );
 
-  if (loading) return <Layout title="Inventory Management"><div className="animate-pulse h-64 bg-gray-200 rounded-xl" /></Layout>;
+  if (loading) {
+    return <Layout title="Shop"><div className="animate-pulse h-64 bg-gray-200 rounded-2xl" /></Layout>;
+  }
 
   return (
-    <Layout title="Inventory Management">
+    <Layout title="Shop">
       <div className="space-y-6">
-        {/* Filters & Search */}
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <SummaryCard label="Today's Sales" value={soldRecords.length} icon={TrendingUp} tone="navy" />
+          <SummaryCard label="Items in Stock" value={stockRecords.length} icon={Package} tone="yellow" />
+          <SummaryCard label="Low Stock" value={lowStock.length} icon={AlertTriangle} tone="orange" />
+          <SummaryCard label="Items Sold" value={soldRecords.length} icon={ShoppingCart} tone="green" />
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {([
+            ['SHOP', 'Shop'],
+            ['STOCK', 'Stock'],
+            ['SALES', 'Sales']
+          ] as [View, string][]).map(([key, label]) => (
+            <button key={key} onClick={() => setView(key)}
+              className={`min-w-[100px] px-5 py-3 rounded-xl font-bold text-sm ${
+                view === key ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600'
+              }`}>
+              {label}
+            </button>
+          ))}
+          <button onClick={loadRecords} className="ml-auto p-3 rounded-xl bg-gray-100 text-gray-600" title="Refresh">
+            <RefreshCcw className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex gap-3">
           <div className="relative flex-1">
-            <label htmlFor="inventorySearch" className="sr-only">Search Inventory</label>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              id="inventorySearch"
-              name="inventorySearch"
-              type="text"
-              placeholder="Search brand, model, or IMEI..."
-              className="input-field pl-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input value={search} onChange={event => setSearch(event.target.value)}
+              className="input-field pl-12 py-4 rounded-2xl" placeholder="Search phone, charger, cable, IMEI..." />
           </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setFilter('ALL')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'ALL' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-500'}`}
-            >
-              All
-            </button>
-            <button 
-              onClick={() => setFilter('IN_STOCK')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'IN_STOCK' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
-            >
-              In Stock
-            </button>
-            <button 
-              onClick={() => setFilter('SOLD')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'SOLD' ? 'bg-yellow text-navy' : 'bg-gray-100 text-gray-500'}`}
-            >
-              Sold
-            </button>
-          </div>
+          <button onClick={() => setShowFilters(previous => !previous)}
+            className={`px-4 rounded-2xl border flex items-center gap-2 font-bold ${showFilters ? 'bg-navy text-white' : 'bg-white text-gray-600'}`}>
+            <Filter className="w-5 h-5" /><span className="hidden sm:inline">Filter</span>
+          </button>
         </div>
 
-        {/* Inventory List */}
-        <div className="space-y-4">
-          {filteredRecords.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-              <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No devices found matching your filters.</p>
-            </div>
-          ) : (
-            filteredRecords.map((record) => (
-              <div key={record.id} className="card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${record.deviceStatus === 'SOLD' ? 'bg-yellow text-navy' : 'bg-navy'}`}>
-                    <Smartphone className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-navy">{record.brand} {record.model}</h4>
-                    <p className="text-xs text-gray-500">IMEI: {record.imei1}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                        record.deviceStatus === 'SOLD' ? 'bg-yellow/20 text-navy' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {record.deviceStatus === 'SOLD' ? 'Sold' : 'In Stock'}
-                      </span>
-                      {record.deviceStatus === 'SOLD' && record.buyerName && (
-                        <span className="text-[10px] text-navy font-bold">Buyer: {record.buyerName}</span>
-                      )}
-                      <span className="text-[10px] text-gray-400">Added: {record.date}</span>
-                    </div>
-                  </div>
-                </div>
+        {showFilters && (
+          <div className="flex flex-wrap gap-2 p-4 bg-gray-50 rounded-2xl">
+            {([
+              ['ALL', 'All'], ['IN_STOCK', 'In Stock'], ['LOW_STOCK', 'Low Stock'], ['SOLD', 'Sold']
+            ] as [FilterValue, string][]).map(([key, label]) => (
+              <button key={key} onClick={() => setFilter(key)}
+                className={`px-4 py-2 rounded-xl text-sm font-bold ${filter === key ? 'bg-navy text-white' : 'bg-white text-gray-600'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
-                <div className="flex items-center gap-2">
-                  <Link to={`/records/${record.id}`} className="flex-1 md:flex-none px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors text-center">
-                    Details
-                  </Link>
-                  {record.deviceStatus === 'IN_STOCK' ? (
-                    <button 
-                      onClick={() => handleUpdateStatus(record.id, 'SOLD')}
-                      disabled={updating === record.id}
-                      className="flex-1 md:flex-none px-4 py-2 bg-yellow text-navy rounded-lg text-xs font-bold hover:bg-yellow/90 transition-colors flex items-center justify-center gap-2"
-                    >
-                      {updating === record.id ? <RefreshCcw className="w-3 h-3 animate-spin" /> : <ShoppingCart className="w-3 h-3" />}
-                      Mark as Sold
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => handleUpdateStatus(record.id, 'IN_STOCK')}
-                      disabled={updating === record.id}
-                      className="flex-1 md:flex-none px-4 py-2 bg-navy text-white rounded-lg text-xs font-bold hover:bg-navy/90 transition-colors flex items-center justify-center gap-2"
-                    >
-                      {updating === record.id ? <RefreshCcw className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-                      Return to Stock
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        {view === 'SHOP' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredRecords.filter(record => record.deviceStatus !== 'SOLD').map(record => (
+              <ProductCard key={record.id} record={record} photo={productPhoto(record)}
+                updating={updating === record.id} onSell={() => updateStatus(record.id, 'SOLD')} />
+            ))}
+          </div>
+        )}
+        {view === 'STOCK' && <ItemList records={filteredRecords.filter(record => record.deviceStatus !== 'SOLD')} onSell={record => updateStatus(record.id, 'SOLD')} updating={updating} />}
+        {view === 'SALES' && <ItemList records={filteredRecords.filter(record => record.deviceStatus === 'SOLD')} onReturn={record => updateStatus(record.id, 'IN_STOCK')} updating={updating} />}
+
+        {filteredRecords.length === 0 && (
+          <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+            <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="font-bold text-gray-600">Nothing here yet</p>
+            <p className="text-sm text-gray-500 mt-1">Try another search or add a new record.</p>
+          </div>
+        )}
       </div>
 
-      {showBuyerModal && (
-        <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in duration-300">
-            <h3 className="text-xl font-bold text-navy mb-4">Buyer Information</h3>
-            <p className="text-sm text-gray-500 mb-6">Please record the details of the buyer for this transaction.</p>
-            
-            <div className="space-y-4">
-               <div>
-                <label htmlFor="buyerName" className="block text-xs font-bold text-gray-400 uppercase mb-1">Buyer Name</label>
-                <input 
-                  id="buyerName"
-                  name="buyerName"
-                  type="text" 
-                  value={buyerDetails.name}
-                  onChange={(e) => setBuyerDetails({...buyerDetails, name: e.target.value})}
-                  className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-navy font-medium focus:ring-2 focus:ring-navy/10"
-                  placeholder="Full Name"
-                />
-              </div>
-              <div>
-                <label htmlFor="buyerPhone" className="block text-xs font-bold text-gray-400 uppercase mb-1">Phone Number</label>
-                <input 
-                  id="buyerPhone"
-                  name="buyerPhone"
-                  type="tel" 
-                  value={buyerDetails.phone}
-                  onChange={(e) => setBuyerDetails({...buyerDetails, phone: e.target.value})}
-                  className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-navy font-medium focus:ring-2 focus:ring-navy/10"
-                  placeholder="080..."
-                />
-              </div>
-              <div>
-                <label htmlFor="buyerAddress" className="block text-xs font-bold text-gray-400 uppercase mb-1">Address</label>
-                <textarea 
-                  id="buyerAddress"
-                  name="buyerAddress"
-                  value={buyerDetails.address}
-                  onChange={(e) => setBuyerDetails({...buyerDetails, address: e.target.value})}
-                  className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-navy font-medium focus:ring-2 focus:ring-navy/10 h-24 resize-none"
-                  placeholder="Buyer's Address"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8">
-              <button 
-                onClick={() => {
-                  setShowBuyerModal(false);
-                  setSelectedRecordId(null);
-                }}
-                className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => selectedRecordId && handleUpdateStatus(selectedRecordId, 'SOLD', buyerDetails)}
-                disabled={!buyerDetails.name || !buyerDetails.phone || !!updating}
-                className="flex-1 py-3 rounded-xl font-bold text-white bg-navy hover:bg-navy/90 transition-colors disabled:opacity-50"
-              >
-                {updating ? 'Processing...' : 'Confirm Sale'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showConfirmReturnModal && (
-        <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in duration-300">
-            <div className="w-16 h-16 bg-yellow/10 rounded-2xl flex items-center justify-center text-yellow-600 mb-6">
-              <RefreshCcw className="w-8 h-8" />
-            </div>
-            <h3 className="text-xl font-bold text-navy mb-2">Return to Stock?</h3>
-            <p className="text-sm text-gray-500 mb-8">
-              Are you sure you want to return this device to stock? This will clear the current buyer information.
-            </p>
-            
-            <div className="flex gap-3">
-              <button 
-                onClick={() => {
-                  setShowConfirmReturnModal(false);
-                  setSelectedRecordId(null);
-                }}
-                className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => selectedRecordId && handleUpdateStatus(selectedRecordId, 'IN_STOCK', {})}
-                disabled={!!updating}
-                className="flex-1 py-3 rounded-xl font-bold text-white bg-navy hover:bg-navy/90 transition-colors disabled:opacity-50"
-              >
-                {updating ? 'Processing...' : 'Confirm Return'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showBuyerModal && <BuyerModal details={buyerDetails} setDetails={setBuyerDetails}
+        onCancel={() => setShowBuyerModal(false)}
+        onConfirm={() => selectedRecordId && updateStatus(selectedRecordId, 'SOLD', buyerDetails)}
+        busy={!!updating} />}
+      {showReturnModal && <ConfirmModal onCancel={() => setShowReturnModal(false)}
+        onConfirm={() => selectedRecordId && updateStatus(selectedRecordId, 'IN_STOCK', {})}
+        busy={!!updating} />}
     </Layout>
   );
+}
+
+function SummaryCard({ label, value, icon: Icon, tone }: any) {
+  const styles: Record<string, string> = {
+    navy: 'bg-navy text-white', yellow: 'bg-yellow text-navy',
+    orange: 'bg-orange-50 text-orange-800', green: 'bg-green-50 text-green-800'
+  };
+  return <div className={`rounded-2xl p-4 min-h-[105px] ${styles[tone]}`}>
+    <Icon className="w-5 h-5 mb-3 opacity-80" />
+    <p className="text-2xl font-black">{value}</p><p className="text-xs font-bold opacity-70">{label}</p>
+  </div>;
+}
+
+function ProductCard({ record, photo, onSell, updating }: any) {
+  return <div className="card overflow-hidden">
+    <div className="h-40 bg-gray-100 flex items-center justify-center">
+      {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : <Smartphone className="w-14 h-14 text-gray-300" />}
+    </div>
+    <div className="p-4">
+      <h3 className="font-black text-navy text-lg truncate">{record.brand} {record.model}</h3>
+      <p className="text-xs text-gray-500 mt-1">IMEI: {record.imei1 || 'Not provided'}</p>
+      <div className="flex justify-between items-center mt-4">
+        <span className="text-sm font-bold text-green-700">Stock: {record.stock || 1}</span>
+        <button onClick={onSell} disabled={updating} className="px-5 py-2.5 bg-yellow text-navy rounded-xl font-black text-sm flex items-center gap-2">
+          {updating ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />} Sell
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
+function ItemList({ records, onSell, onReturn, updating }: any) {
+  return <div className="space-y-3">{records.map((record: any) => (
+    <div key={record.id} className="card p-4 flex items-center gap-3">
+      <div className="w-12 h-12 rounded-xl bg-navy flex items-center justify-center text-white"><Smartphone /></div>
+      <div className="flex-1 min-w-0"><h3 className="font-bold truncate">{record.brand} {record.model}</h3>
+        <p className="text-xs text-gray-500 truncate">{record.imei1 || 'No IMEI'} {record.buyerName ? `- Buyer: ${record.buyerName}` : ''}</p></div>
+      <Link to={`/records/${record.id}`} className="hidden sm:block text-xs font-bold text-gray-500">Details</Link>
+      {onSell && <button onClick={() => onSell(record)} disabled={updating === record.id} className="px-3 py-2 bg-yellow rounded-lg text-xs font-bold">Sell</button>}
+      {onReturn && <button onClick={() => onReturn(record)} disabled={updating === record.id} className="px-3 py-2 bg-navy text-white rounded-lg text-xs font-bold">Return</button>}
+    </div>
+  ))}</div>;
+}
+
+function BuyerModal({ details, setDetails, onCancel, onConfirm, busy }: any) {
+  return <Modal title="Who is buying this item?" onCancel={onCancel}>
+    {(['name', 'phone', 'address'] as const).map(field => <input key={field} value={details[field]} onChange={event => setDetails({ ...details, [field]: event.target.value })}
+      className="input-field" placeholder={field === 'name' ? 'Buyer name' : field === 'phone' ? 'Phone number' : 'Address'} />)}
+    <button onClick={onConfirm} disabled={!details.name || !details.phone || busy} className="btn-primary w-full py-3 disabled:opacity-50">{busy ? 'Saving...' : 'Confirm Sale'}</button>
+  </Modal>;
+}
+
+function ConfirmModal({ onCancel, onConfirm, busy }: any) {
+  return <Modal title="Return this item to stock?" onCancel={onCancel}><p className="text-gray-600 text-sm">The buyer details will be cleared.</p><button onClick={onConfirm} disabled={busy} className="btn-primary w-full py-3">{busy ? 'Saving...' : 'Confirm Return'}</button></Modal>;
+}
+
+function Modal({ title, onCancel, children }: any) {
+  return <div className="fixed inset-0 z-50 bg-navy/60 flex items-center justify-center p-4"><div className="bg-white rounded-3xl w-full max-w-md p-6 space-y-4"><div className="flex justify-between items-center"><h2 className="text-xl font-black text-navy">{title}</h2><button onClick={onCancel}><X /></button></div>{children}<button onClick={onCancel} className="w-full py-3 bg-gray-100 rounded-xl font-bold text-gray-600">Cancel</button></div></div>;
 }
