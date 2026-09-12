@@ -81,6 +81,15 @@ service cloud.firestore {
              data.managerId is string;
     }
 
+    function isValidSaleAssignment(data) {
+      return data.recordId is string &&
+             data.salesPersonId is string &&
+             data.salesPersonName is string &&
+             data.salesPersonName.size() > 0 &&
+             data.salesPersonName.size() < 100 &&
+             data.soldAt is string;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -96,6 +105,12 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidSalesPerson(request.resource.data);
         allow update: if isOwner(userId) && isValidSalesPerson(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /saleAssignments/{recordId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidSaleAssignment(request.resource.data);
         allow delete: if isOwner(userId);
       }
     }
