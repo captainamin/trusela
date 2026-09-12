@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
-import { LayoutDashboard, PlusCircle, List, LogOut, User as UserIcon, RefreshCcw, CreditCard, ShoppingBag } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, List, LogOut, User as UserIcon, RefreshCcw, CreditCard, ShoppingBag, Users } from 'lucide-react';
 import logo from '../assets/logo.png';
 import { toast } from 'sonner';
 import { useUser } from '../contexts/UserContext';
@@ -45,6 +45,7 @@ export default function Layout({ children, title }: LayoutProps) {
   }, []);
 
   const isAdmin = metadata?.role === 'admin';
+  const canManageStaff = isAdmin || (metadata?.planType === 'manager' && metadata?.subscriptionStatus === 'active');
   const isExpired = metadata?.subscriptionStatus === 'expired' || 
     (metadata?.subscriptionStatus === 'trial' && new Date(metadata?.trialEndsAt || '') < new Date());
 
@@ -59,6 +60,7 @@ export default function Layout({ children, title }: LayoutProps) {
         { path: '/inventory', icon: ShoppingBag, label: 'Shop' },
         { path: '/add', icon: PlusCircle, label: 'Add Record' },
         { path: '/records', icon: List, label: 'Records' },
+        ...(canManageStaff ? [{ path: '/sales-persons', icon: Users, label: 'Staff' }] : []),
         { path: isExpired ? '/activate' : '/subscription', icon: CreditCard, label: 'Subscription' },
         { path: '/profile', icon: UserIcon, label: 'Profile' },
       ];

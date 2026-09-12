@@ -39,11 +39,12 @@ const MarketDatabase  = lazy(() => import('./pages/market/MarketDatabase'));
 interface PrivateRouteProps {
   element: React.ReactElement;
   requireAdmin?: boolean;
+  requireManager?: boolean;
   allowExpired?: boolean;
 }
 
 // Business Route Logic
-function PrivateRoute({ element, requireAdmin = false, allowExpired = false }: PrivateRouteProps) {
+function PrivateRoute({ element, requireAdmin = false, requireManager = false, allowExpired = false }: PrivateRouteProps) {
   const { user, metadata, loading, activeProfileMode } = useUser();
 
   if (loading) return <SplashScreen />;
@@ -59,6 +60,9 @@ function PrivateRoute({ element, requireAdmin = false, allowExpired = false }: P
   if (isMarketUser) return <Navigate to="/market/dashboard" replace />;
 
   if (requireAdmin) return <Navigate to="/" replace />;
+  if (requireManager && metadata?.role !== 'admin' && (metadata?.planType !== 'manager' || metadata?.subscriptionStatus !== 'active')) {
+    return <Navigate to="/" replace />;
+  }
 
   // Check if they need to complete account setup first
   const isSetupPage = window.location.pathname === '/setup';
@@ -117,7 +121,7 @@ export default function App() {
             <Route path="/records/:id" element={<PrivateRoute element={<RecordDetail />} />} />
             <Route path="/subscription" element={<PrivateRoute element={<Subscription />} allowExpired />} />
             <Route path="/subscription/callback" element={<PrivateRoute element={<SubscriptionCallback />} allowExpired />} />
-            <Route path="/sales-persons" element={<PrivateRoute element={<SalesPersons />} />} />
+            <Route path="/sales-persons" element={<PrivateRoute element={<SalesPersons />} requireManager />} />
             <Route path="/reports" element={<PrivateRoute element={<Reports />} />} />
             <Route path="/inventory" element={<PrivateRoute element={<Inventory />} />} />
             <Route path="/profile" element={<PrivateRoute element={<Profile />} allowExpired />} />
