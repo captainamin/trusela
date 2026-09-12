@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import {
   AlertTriangle, CheckCircle2, Filter, Package, RefreshCcw, Search,
-  ShoppingCart, Smartphone, TrendingUp, X, Printer
+  ShoppingCart, Smartphone, TrendingUp, Users, X, Printer
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -240,10 +240,10 @@ export default function Inventory() {
           )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <SummaryCard label="Today's Sales" value={soldRecords.length} icon={TrendingUp} tone="navy" />
+          <SummaryCard label="Total Sales" value={soldRecords.length} icon={TrendingUp} tone="navy" />
           <SummaryCard label="Items in Stock" value={stockRecords.length} icon={Package} tone="yellow" />
           <SummaryCard label="Low Stock" value={lowStock.length} icon={AlertTriangle} tone="orange" />
-          <SummaryCard label="Items Sold" value={soldRecords.length} icon={ShoppingCart} tone="green" />
+          <SummaryCard label="Team Members" value={salesPersons.length} icon={Users} tone="green" />
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1">
