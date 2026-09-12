@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { Html5Qrcode } from 'html5-qrcode';
 import Layout from '../components/Layout';
 import { useUser } from '../contexts/UserContext';
 import { getEmbedUrl } from '../utils/googleDrive';
@@ -27,6 +28,8 @@ export default function Inventory() {
   const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [buyerDetails, setBuyerDetails] = useState({ name: '', phone: '', address: '' });
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannerError, setScannerError] = useState('');
   const canManageInventory = metadata?.role === 'admin' ||
     (metadata?.planType === 'manager' && metadata?.subscriptionStatus === 'active');
 
@@ -46,6 +49,31 @@ export default function Inventory() {
   };
 
   useEffect(() => { loadRecords(); }, [user, metadata?.spreadsheetId]);
+
+  useEffect(() => {
+    if (!showScanner) return;
+    const scanner = new Html5Qrcode('inventory-scanner');
+    let active = true;
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 240, height: 160 } },
+      decodedText => {
+        if (!active) return;
+        setSearch(decodedText);
+        setShowScanner(false);
+        toast.success('Code scanned. Matching items are shown below.');
+      },
+      () => {}
+    ).catch(() => {
+      if (active) setScannerError('Camera could not start. Check browser permission and try again.');
+    });
+    return () => {
+      active = false;
+      if (scanner.isScanning) {
+        scanner.stop().catch(() => {});
+      }
+    };
+  }, [showScanner]);
 
   const stockRecords = useMemo(
     () => records.filter(record => record.deviceStatus !== 'SOLD'),
@@ -204,6 +232,10 @@ export default function Inventory() {
             <input value={search} onChange={event => setSearch(event.target.value)}
               className="input-field pl-12 py-4 rounded-2xl" placeholder="Search phone, charger, cable, IMEI..." />
           </div>
+          <button onClick={() => { setScannerError(''); setShowScanner(true); }}
+            className="px-4 rounded-2xl bg-yellow text-navy font-bold flex items-center gap-2" title="Scan barcode or QR code">
+            <Smartphone className="w-5 h-5" /><span className="hidden sm:inline">Scan</span>
+          </button>
           <button onClick={() => setShowFilters(previous => !previous)}
             className={`px-4 rounded-2xl border flex items-center gap-2 font-bold ${showFilters ? 'bg-navy text-white' : 'bg-white text-gray-600'}`}>
             <Filter className="w-5 h-5" /><span className="hidden sm:inline">Filter</span>
@@ -242,6 +274,21 @@ export default function Inventory() {
           </div>
         )}
       </div>
+
+      {showScanner && (
+        <div className="fixed inset-0 z-50 bg-navy/70 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-navy text-lg">Scan barcode or QR code</h2>
+              <button onClick={() => setShowScanner(false)}><X /></button>
+            </div>
+            <div id="inventory-scanner" className="overflow-hidden rounded-2xl bg-black min-h-[240px]" />
+            <p className="text-sm text-gray-500">Point the camera at the product code. The result will be used to search your shop.</p>
+            {scannerError && <p className="text-sm text-red-600 font-medium">{scannerError}</p>}
+            <button onClick={() => setShowScanner(false)} className="w-full py-3 rounded-xl bg-gray-100 text-gray-700 font-bold">Close</button>
+          </div>
+        </div>
+      )}
 
       {showBuyerModal && <BuyerModal details={buyerDetails} setDetails={setBuyerDetails}
         onCancel={() => setShowBuyerModal(false)}
