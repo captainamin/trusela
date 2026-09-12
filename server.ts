@@ -8,6 +8,7 @@ import path from 'path';
 import { initFirebase, getFirestore } from './server/config/firebase.ts';
 import { getDrive, getOAuth2Client } from './server/config/google.ts';
 import admin from 'firebase-admin';
+import { requireAuth, requireAuthOrSignedMedia } from './server/middleware/auth.ts';
 
 // Import Routes
 import { googleRouter } from './server/routes/google.ts';
@@ -38,7 +39,7 @@ async function startServer() {
   app.use('/api', imeiRouter);
 
   app.get('/api/ping', (req, res) => res.send('pong'));
-  app.get('/api/test-proxy', (req, res) => {
+  app.get('/api/test-proxy', requireAuth, (req, res) => {
     console.log('[DEBUG] Test proxy hit');
     res.send('API Proxy is alive');
   });
@@ -52,10 +53,10 @@ async function startServer() {
   });
 
   // Catch any URL that looks like a drive image proxy
-  app.get(/.*drive-image.*/, async (req, res) => {
+  app.get(/.*drive-image.*/, requireAuthOrSignedMedia, async (req, res) => {
     try {
       const url = req.url;
-      const fileId = req.params[0] || req.url.split('/').pop()?.split('?')[0];
+      const fileId = req.url.split('?')[0].split('/').filter(Boolean).pop();
       const userId = req.query.userId;
       
       console.log(`[Proxy-Wildcard] Match! URL: ${url}, fileId: ${fileId}, userId: ${userId}`);
@@ -64,6 +65,7 @@ async function startServer() {
         console.error('[Proxy-Direct] No userId');
         return res.status(400).send('User ID is required');
       }
+      if (!fileId) return res.status(400).send('File ID is required');
 
       const db = getFirestore();
       const userDoc = await db.collection('users').doc(userId).get();
@@ -87,8 +89,7 @@ async function startServer() {
       console.log(`[Proxy-Direct] Serving ${fileId} as ${contentType}`);
       
       res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       
       response.data.on('error', (err) => {
@@ -121,11 +122,13 @@ async function startServer() {
       const httpStatus = (typeof error.code === 'number' && grpcToHttp[error.code])
         ? grpcToHttp[error.code]
         : (typeof error.code === 'number' && error.code >= 100 && error.code < 600 ? error.code : 500);
-      if (!res.headersSent) res.status(httpStatus).send(error.message);
+      if (!res.headersSent) res.status(httpStatus).send('Unable to retrieve image');
     }
 
   });
 
+  // This endpoint is intentionally public so login/signup can display setup guidance.
+  // It only exposes boolean configuration status, never user data or credentials.
   app.get('/api/config-check', async (req, res) => {
     let hasValidGoogle = false;
     try {
@@ -134,28 +137,12 @@ async function startServer() {
 
     let userRecordCount = null;
     let userIdFound = false;
-    const userId = req.query.userId as string;
-
-    if (userId) {
-      try {
-        const db = getFirestore();
-        const userDoc = await db.collection('users').doc(userId).get();
-        if (userDoc.exists) {
-          userRecordCount = userDoc.data()?.recordCount;
-          userIdFound = true;
-        }
-      } catch (e) {
-        console.error('Config-check Firestore error:', e.message);
-      }
-    }
-
     const config = {
       hasGoogleCreds: hasValidGoogle,
       hasPaystackKey: !!process.env.PAYSTACK_SECRET_KEY,
       hasAppUrl: !!process.env.APP_URL,
       serverVersion: 'v3-debug-count',
       debug: {
-        userId,
         userIdFound,
         userRecordCount
       }

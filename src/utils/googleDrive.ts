@@ -21,11 +21,8 @@ export const getEmbedUrl = (url: string | null | undefined, userId?: string): st
   }
 
   if (fileId) {
-    // If we have a userId, use our server-side proxy to bypass CORB
-    if (userId) {
-      return `/proxy-drive-image/${fileId}?userId=${userId}`;
-    }
-    // Fallback to direct link if no userId (still likely to hit CORB but better than nothing)
+    // Existing Drive links may already be public. Newly uploaded files use the
+    // signed proxy URL returned by the API and are handled above unchanged.
     return `https://drive.google.com/uc?export=view&id=${fileId}`;
   }
 

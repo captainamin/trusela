@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import admin from 'firebase-admin';
 import { getFirestore } from '../config/firebase.ts';
+import { requireAuth } from '../middleware/auth.ts';
 
 export const imeiRouter = Router();
+imeiRouter.use(requireAuth);
 
 const validateIMEI = (imei: string) => {
   if (!/^\d{15}$/.test(imei)) return false;
