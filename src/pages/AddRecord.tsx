@@ -17,6 +17,7 @@ export default function AddRecord() {
   const navigate = useNavigate();
   const location = useLocation();
   const inventoryMode = location.state?.inventoryMode as 'product' | 'stock' | undefined;
+  const isInventoryEntry = Boolean(inventoryMode);
   const [isPremium, setIsPremium] = useState(false);
   const [recordCount, setRecordCount] = useState(0);
 
@@ -302,7 +303,7 @@ export default function AddRecord() {
 
   const handleSave = async () => {
     if (!formData.confirmed) {
-      toast.error('Please confirm the device is not stolen');
+      toast.error(isInventoryEntry ? 'Please confirm the inventory details' : 'Please confirm the device is not stolen');
       return;
     }
     
@@ -347,6 +348,10 @@ export default function AddRecord() {
       // Generate an idempotent ID for this specific save attempt
       const recordPayload = {
         ...formData,
+        sellerName: isInventoryEntry ? 'Shop inventory' : formData.sellerName,
+        phoneNumber: isInventoryEntry ? 'N/A' : formData.phoneNumber,
+        address: isInventoryEntry ? 'N/A' : formData.address,
+        signature: isInventoryEntry ? '' : formData.signature,
         receiptImage: receiptBase64,
         id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 5)
       };
@@ -645,9 +650,19 @@ export default function AddRecord() {
         {step === 1 && (
           <div className="space-y-4 animate-in slide-in-from-right duration-300">
             <h3 className="text-lg font-bold text-navy flex items-center gap-2">
-              <User className="w-5 h-5" /> Seller Information
+              {isInventoryEntry ? <Package className="w-5 h-5" /> : <User className="w-5 h-5" />}
+              {isInventoryEntry ? `${inventoryMode === 'stock' ? 'Stock' : 'Product'} Information` : 'Seller Information'}
             </h3>
             <div className="space-y-4">
+              {isInventoryEntry && (
+                <p className="text-sm text-gray-500">
+                  {inventoryMode === 'stock'
+                    ? 'Add this item as a new stock record. Use one entry per device so IMEI tracking remains accurate.'
+                    : 'Create a product record for your shop. You can add its IMEI and photos now or complete them later.'}
+                </p>
+              )}
+              {!isInventoryEntry && (
+              <>
               <div className="space-y-1">
                 <label htmlFor="sellerName" className="text-[10px] font-bold text-gray-400 uppercase">Full Name</label>
                 <input
@@ -718,15 +733,19 @@ export default function AddRecord() {
                   )}
                 </div>
               </div>
+              </>
+              )}
             </div>
-            <button onClick={() => setStep(2)} className="w-full btn-primary py-4 mt-4">Next: Device Info</button>
+            <button onClick={() => setStep(2)} className="w-full btn-primary py-4 mt-4">
+              {isInventoryEntry ? 'Next: Product Details' : 'Next: Device Info'}
+            </button>
           </div>
         )}
 
         {step === 2 && (
           <div className="space-y-4 animate-in slide-in-from-right duration-300">
             <h3 className="text-lg font-bold text-navy flex items-center gap-2">
-              <Smartphone className="w-5 h-5" /> Device Information
+              <Smartphone className="w-5 h-5" /> {isInventoryEntry ? 'Product Details' : 'Device Information'}
             </h3>
             <div className="space-y-4">
               <div className="space-y-1">
@@ -837,7 +856,7 @@ export default function AddRecord() {
                     onChange={(e) => setFormData({ ...formData, deviceStatus: e.target.value })}
                   >
                     <option value="IN_STOCK">In Stock</option>
-                    <option value="SOLD">Sold</option>
+                    {!isInventoryEntry && <option value="SOLD">Sold</option>}
                   </select>
                 </div>
               </div>
@@ -881,7 +900,7 @@ export default function AddRecord() {
             <div className="card space-y-4">
               <div className="flex justify-between border-b pb-2">
                 <span className="text-gray-500">Seller</span>
-                <span className="font-bold">{formData.sellerName}</span>
+                <span className="font-bold">{isInventoryEntry ? 'Shop inventory' : formData.sellerName}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-gray-500">Device</span>
@@ -913,9 +932,11 @@ export default function AddRecord() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t">
-                <SignaturePad onSave={(sig) => setFormData(prev => ({ ...prev, signature: sig }))} />
-              </div>
+              {!isInventoryEntry && (
+                <div className="pt-4 border-t">
+                  <SignaturePad onSave={(sig) => setFormData(prev => ({ ...prev, signature: sig }))} />
+                </div>
+              )}
             </div>
 
             <label htmlFor="confirmed" className="flex items-start gap-3 p-4 bg-yellow/10 rounded-xl border border-yellow/20 cursor-pointer">
@@ -928,16 +949,18 @@ export default function AddRecord() {
                 onChange={e => setFormData({ ...formData, confirmed: e.target.checked })}
               />
               <span className="text-sm font-medium text-navy">
-                I confirm this device is not stolen to my knowledge and I have verified the seller's identity.
+                {isInventoryEntry
+                  ? 'I confirm these inventory details are accurate and this item belongs to my shop stock.'
+                  : "I confirm this device is not stolen to my knowledge and I have verified the seller's identity."}
               </span>
             </label>
 
             <div className="flex gap-4">
               <button onClick={() => setStep(2)} className="flex-1 bg-gray-200 text-gray-700 py-4 rounded-xl font-medium">Back</button>
-              <button onClick={handleSave} disabled={loading || !formData.signature} className="flex-1 btn-primary py-4 flex items-center justify-center gap-2">
+              <button onClick={handleSave} disabled={loading || (!isInventoryEntry && !formData.signature)} className="flex-1 btn-primary py-4 flex items-center justify-center gap-2">
                 {loading ? 'Saving...' : (
                   <>
-                    <Save className="w-5 h-5" /> Save Record
+                    <Save className="w-5 h-5" /> {isInventoryEntry ? `Save ${inventoryMode === 'stock' ? 'Stock' : 'Product'}` : 'Save Record'}
                   </>
                 )}
               </button>
