@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, CheckCircle2, Filter, Package, RefreshCcw, Search,
-  ShoppingCart, Smartphone, TrendingUp, X
+  ShoppingCart, Smartphone, TrendingUp, X, Printer
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -118,6 +118,37 @@ export default function Inventory() {
     user?.uid
   );
 
+  const printReceipt = (record: any) => {
+    const receiptWindow = window.open('', '_blank', 'width=420,height=700');
+    if (!receiptWindow) {
+      toast.error('Please allow pop-ups to print a receipt');
+      return;
+    }
+    const shopName = metadata?.dealerName || 'Trusela Shop';
+    receiptWindow.document.write(`<!doctype html><html><head><title>Receipt ${record.id}</title>
+      <style>
+        @page { size: 80mm auto; margin: 4mm; }
+        body { width: 72mm; font: 13px Arial, sans-serif; color: #111; margin: 0; }
+        h1 { font-size: 20px; text-align: center; margin: 0 0 4px; }
+        p { margin: 5px 0; } .line { border-top: 1px dashed #555; margin: 10px 0; }
+        .row { display: flex; justify-content: space-between; gap: 8px; }
+        .small { font-size: 11px; color: #555; }
+      </style></head><body>
+      <h1>${escapeHtml(shopName)}</h1>
+      <p style="text-align:center">Sales Receipt</p><div class="line"></div>
+      <div class="row"><span>Receipt</span><strong>${escapeHtml(record.id || '')}</strong></div>
+      <div class="row"><span>Date</span><span>${escapeHtml(record.date || new Date().toLocaleDateString())}</span></div>
+      <div class="line"></div>
+      <p><strong>${escapeHtml(`${record.brand || ''} ${record.model || ''}`.trim())}</strong></p>
+      <p class="small">IMEI: ${escapeHtml(record.imei1 || 'N/A')}</p>
+      <p class="small">Buyer: ${escapeHtml(record.buyerName || 'Walk-in customer')}</p>
+      <p class="small">Phone: ${escapeHtml(record.buyerPhone || 'N/A')}</p>
+      <div class="line"></div><p style="text-align:center">Thank you for your business.</p>
+      <script>window.onload = function () { window.print(); window.close(); }<\/script>
+      </body></html>`);
+    receiptWindow.document.close();
+  };
+
   if (loading) {
     return <Layout title="Shop"><div className="animate-pulse h-64 bg-gray-200 rounded-2xl" /></Layout>;
   }
@@ -201,7 +232,7 @@ export default function Inventory() {
           </div>
         )}
         {view === 'STOCK' && <ItemList records={filteredRecords.filter(record => record.deviceStatus !== 'SOLD')} onSell={record => updateStatus(record.id, 'SOLD')} updating={updating} />}
-        {view === 'SALES' && <ItemList records={filteredRecords.filter(record => record.deviceStatus === 'SOLD')} onReturn={record => updateStatus(record.id, 'IN_STOCK')} updating={updating} />}
+        {view === 'SALES' && <ItemList records={filteredRecords.filter(record => record.deviceStatus === 'SOLD')} onReturn={record => updateStatus(record.id, 'IN_STOCK')} onPrint={printReceipt} updating={updating} />}
 
         {filteredRecords.length === 0 && (
           <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
@@ -221,6 +252,12 @@ export default function Inventory() {
         busy={!!updating} />}
     </Layout>
   );
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[character] || character));
 }
 
 function SummaryCard({ label, value, icon: Icon, tone }: any) {
@@ -252,7 +289,7 @@ function ProductCard({ record, photo, onSell, updating }: any) {
   </div>;
 }
 
-function ItemList({ records, onSell, onReturn, updating }: any) {
+function ItemList({ records, onSell, onReturn, onPrint, updating }: any) {
   return <div className="space-y-3">{records.map((record: any) => (
     <div key={record.id} className="card p-4 flex items-center gap-3">
       <div className="w-12 h-12 rounded-xl bg-navy flex items-center justify-center text-white"><Smartphone /></div>
@@ -261,6 +298,7 @@ function ItemList({ records, onSell, onReturn, updating }: any) {
       <Link to={`/records/${record.id}`} className="hidden sm:block text-xs font-bold text-gray-500">Details</Link>
       {onSell && <button onClick={() => onSell(record)} disabled={updating === record.id} className="px-3 py-2 bg-yellow rounded-lg text-xs font-bold">Sell</button>}
       {onReturn && <button onClick={() => onReturn(record)} disabled={updating === record.id} className="px-3 py-2 bg-navy text-white rounded-lg text-xs font-bold">Return</button>}
+      {onPrint && <button onClick={() => onPrint(record)} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold flex items-center gap-1"><Printer className="w-3 h-3" /> Receipt</button>}
     </div>
   ))}</div>;
 }
