@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import {
   AlertTriangle, CheckCircle2, Filter, Package, RefreshCcw, Search,
   ShoppingCart, Smartphone, TrendingUp, X, Printer
@@ -9,6 +10,7 @@ import { toast } from 'sonner';
 import { Html5Qrcode } from 'html5-qrcode';
 import Layout from '../components/Layout';
 import { useUser } from '../contexts/UserContext';
+import { db } from '../firebase';
 import { getEmbedUrl } from '../utils/googleDrive';
 
 type View = 'SHOP' | 'STOCK' | 'SALES';
@@ -27,9 +29,14 @@ export default function Inventory() {
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
-  const [buyerDetails, setBuyerDetails] = useState({ name: '', phone: '', address: '' });
+  const [buyerDetails, setBuyerDetails] = useState({
+    name: '', phone: '', address: '', salesPersonId: '', salesPersonName: ''
+  });
   const [showScanner, setShowScanner] = useState(false);
   const [scannerError, setScannerError] = useState('');
+  const [salesPersons, setSalesPersons] = useState<any[]>([]);
+  const [saleAssignments, setSaleAssignments] = useState<Record<string, any>>({});
+  const [salesPersonFilter, setSalesPersonFilter] = useState('');
   const canManageInventory = metadata?.role === 'admin' ||
     (metadata?.planType === 'manager' && metadata?.subscriptionStatus === 'active');
 
@@ -49,6 +56,24 @@ export default function Inventory() {
   };
 
   useEffect(() => { loadRecords(); }, [user, metadata?.spreadsheetId]);
+
+  useEffect(() => {
+    if (!user || !canManageInventory) {
+      setSalesPersons([]);
+      setSaleAssignments({});
+      return;
+    }
+    const stopPeople = onSnapshot(collection(db, 'users', user.uid, 'salespersons'), snapshot => {
+      setSalesPersons(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
+    }, () => toast.error('We could not load your sales team'));
+    const stopAssignments = onSnapshot(collection(db, 'users', user.uid, 'saleAssignments'), snapshot => {
+      setSaleAssignments(Object.fromEntries(snapshot.docs.map(item => [item.id, item.data()])));
+    }, () => toast.error('We could not load sale assignments'));
+    return () => {
+      stopPeople();
+      stopAssignments();
+    };
+  }, [user, canManageInventory]);
 
   useEffect(() => {
     if (!showScanner) return;
@@ -97,9 +122,11 @@ export default function Inventory() {
         (filter === 'SOLD' && record.deviceStatus === 'SOLD') ||
         (filter === 'IN_STOCK' && record.deviceStatus !== 'SOLD') ||
         (filter === 'LOW_STOCK' && record.deviceStatus !== 'SOLD' && Number(record.stock || 1) <= 1);
-      return matchesSearch && matchesFilter;
+      const assignment = saleAssignments[record.id];
+      const matchesSalesPerson = !salesPersonFilter || assignment?.salesPersonId === salesPersonFilter;
+      return matchesSearch && matchesFilter && matchesSalesPerson;
     });
-  }, [records, search, filter]);
+  }, [records, search, filter, saleAssignments, salesPersonFilter]);
 
   const updateStatus = async (recordId: string, status: string, details?: any) => {
     if (!metadata?.spreadsheetId || !user) return;
@@ -122,18 +149,29 @@ export default function Inventory() {
         buyerDetails: details,
         userId: user.uid
       });
+      if (status === 'SOLD' && details?.salesPersonId) {
+        await setDoc(doc(db, 'users', user.uid, 'saleAssignments', recordId), {
+          recordId,
+          salesPersonId: details.salesPersonId,
+          salesPersonName: details.salesPersonName,
+          soldAt: new Date().toISOString()
+        });
+      } else if (status === 'IN_STOCK') {
+        await deleteDoc(doc(db, 'users', user.uid, 'saleAssignments', recordId));
+      }
       setRecords(previous => previous.map(record => record.id === recordId ? {
         ...record,
         deviceStatus: status,
         buyerName: details?.name || '',
         buyerPhone: details?.phone || '',
-        buyerAddress: details?.address || ''
+        buyerAddress: details?.address || '',
+        salesPersonName: details?.salesPersonName || ''
       } : record));
       toast.success(status === 'SOLD' ? 'Sale recorded' : 'Item returned to stock');
       setShowBuyerModal(false);
       setShowReturnModal(false);
       setSelectedRecordId(null);
-      setBuyerDetails({ name: '', phone: '', address: '' });
+      setBuyerDetails({ name: '', phone: '', address: '', salesPersonId: '', salesPersonName: '' });
     } catch {
       toast.error('We could not update this item');
     } finally {
@@ -226,6 +264,14 @@ export default function Inventory() {
           </button>
         </div>
 
+        {view === 'SALES' && canManageInventory && salesPersons.length > 0 && (
+          <select value={salesPersonFilter} onChange={event => setSalesPersonFilter(event.target.value)}
+            className="input-field max-w-sm">
+            <option value="">All sales people</option>
+            {salesPersons.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+          </select>
+        )}
+
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -264,7 +310,8 @@ export default function Inventory() {
           </div>
         )}
         {view === 'STOCK' && <ItemList records={filteredRecords.filter(record => record.deviceStatus !== 'SOLD')} onSell={record => updateStatus(record.id, 'SOLD')} updating={updating} />}
-        {view === 'SALES' && <ItemList records={filteredRecords.filter(record => record.deviceStatus === 'SOLD')} onReturn={record => updateStatus(record.id, 'IN_STOCK')} onPrint={printReceipt} updating={updating} />}
+        {view === 'SALES' && <ItemList records={filteredRecords.filter(record => record.deviceStatus === 'SOLD')} assignments={saleAssignments}
+          onReturn={record => updateStatus(record.id, 'IN_STOCK')} onPrint={printReceipt} updating={updating} />}
 
         {filteredRecords.length === 0 && (
           <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
@@ -291,6 +338,7 @@ export default function Inventory() {
       )}
 
       {showBuyerModal && <BuyerModal details={buyerDetails} setDetails={setBuyerDetails}
+        salesPersons={salesPersons}
         onCancel={() => setShowBuyerModal(false)}
         onConfirm={() => selectedRecordId && updateStatus(selectedRecordId, 'SOLD', buyerDetails)}
         busy={!!updating} />}
@@ -336,12 +384,14 @@ function ProductCard({ record, photo, onSell, updating }: any) {
   </div>;
 }
 
-function ItemList({ records, onSell, onReturn, onPrint, updating }: any) {
+function ItemList({ records, onSell, onReturn, onPrint, updating, assignments }: any) {
   return <div className="space-y-3">{records.map((record: any) => (
     <div key={record.id} className="card p-4 flex items-center gap-3">
       <div className="w-12 h-12 rounded-xl bg-navy flex items-center justify-center text-white"><Smartphone /></div>
       <div className="flex-1 min-w-0"><h3 className="font-bold truncate">{record.brand} {record.model}</h3>
-        <p className="text-xs text-gray-500 truncate">{record.imei1 || 'No IMEI'} {record.buyerName ? `- Buyer: ${record.buyerName}` : ''}</p></div>
+        <p className="text-xs text-gray-500 truncate">{record.imei1 || 'No IMEI'} {record.buyerName ? `- Buyer: ${record.buyerName}` : ''}</p>
+        {assignments?.[record.id]?.salesPersonName && <p className="text-xs text-navy font-semibold">Sold by: {assignments[record.id].salesPersonName}</p>}
+      </div>
       <Link to={`/records/${record.id}`} className="hidden sm:block text-xs font-bold text-gray-500">Details</Link>
       {onSell && <button onClick={() => onSell(record)} disabled={updating === record.id} className="px-3 py-2 bg-yellow rounded-lg text-xs font-bold">Sell</button>}
       {onReturn && <button onClick={() => onReturn(record)} disabled={updating === record.id} className="px-3 py-2 bg-navy text-white rounded-lg text-xs font-bold">Return</button>}
@@ -350,10 +400,17 @@ function ItemList({ records, onSell, onReturn, onPrint, updating }: any) {
   ))}</div>;
 }
 
-function BuyerModal({ details, setDetails, onCancel, onConfirm, busy }: any) {
+function BuyerModal({ details, setDetails, salesPersons, onCancel, onConfirm, busy }: any) {
   return <Modal title="Who is buying this item?" onCancel={onCancel}>
     {(['name', 'phone', 'address'] as const).map(field => <input key={field} value={details[field]} onChange={event => setDetails({ ...details, [field]: event.target.value })}
       className="input-field" placeholder={field === 'name' ? 'Buyer name' : field === 'phone' ? 'Phone number' : 'Address'} />)}
+    {salesPersons.length > 0 && <select value={details.salesPersonId} onChange={event => {
+      const person = salesPersons.find((item: any) => item.id === event.target.value);
+      setDetails({ ...details, salesPersonId: event.target.value, salesPersonName: person?.name || '' });
+    }} className="input-field">
+      <option value="">Sale handled by (optional)</option>
+      {salesPersons.map((person: any) => <option key={person.id} value={person.id}>{person.name}</option>)}
+    </select>}
     <button onClick={onConfirm} disabled={!details.name || !details.phone || busy} className="btn-primary w-full py-3 disabled:opacity-50">{busy ? 'Saving...' : 'Confirm Sale'}</button>
   </Modal>;
 }
